@@ -1,0 +1,182 @@
+{
+  "projectScope": {
+    "name": "AI-Powered Student Counseling Platform",
+    "rootPath": "${workspaceFolder}",
+    "excludePaths": ["node_modules", "venv", "env", ".venv", "__pycache__"]
+  },
+  "projectRules": {
+    "structure": {
+      "backend": {
+        "rootDir": "app/",
+        "modelsDir": "app/models/",
+        "schemasDir": "app/schemas/",
+        "routersDir": "app/routers/",
+        "servicesDir": "app/services/",
+        "testsDir": "app/tests/",
+        "apiPrefix": "/api"
+      }
+    },
+    "coding": {
+      "python": {
+        "followPEP8": true,
+        "useTypeHints": true,
+        "requireDocstrings": true,
+        "maxFunctionLength": 50,
+        "meaningfulNames": true
+      },
+      "fastapi": {
+        "usePydanticModels": true,
+        "properErrorHandling": true,
+        "documentEndpoints": true,
+        "restfulEndpoints": true
+      }
+    },
+    "apiIntegration": {
+      "urlHandling": {
+        "handleTrailingSlashes": true,
+        "validateUrls": true,
+        "logUrlAttempts": true
+      },
+      "errorHandling": {
+        "comprehensiveErrors": true,
+        "clearErrorMessages": true,
+        "handleConnectionErrors": true,
+        "logFailedAttempts": true
+      }
+    },
+    "environmentConfig": {
+      "development": {
+        "useEnvFiles": true,
+        "setDefaultValues": true,
+        "documentVariables": true,
+        "includeExamples": true
+      },
+      "production": {
+        "usePlatformSecrets": true,
+        "gracefulFailures": true,
+        "provideFallbacks": true,
+        "validateRequired": true
+      }
+    },
+    "dataManagement": {
+      "storage": {
+        "atomicOperations": true,
+        "validateBeforeSaving": true,
+        "implementErrorHandling": true,
+        "keepBackups": true
+      },
+      "envVariables": {
+        "useDotenv": true,
+        "usePlatformSecrets": true,
+        "neverCommitSensitive": true,
+        "documentRequirements": true
+      }
+    },
+    "testing": {
+      "backend": {
+        "unitTestModels": true,
+        "testApiEndpoints": true,
+        "mockExternalServices": true,
+        "testErrorConditions": true,
+        "validateUrlPaths": true
+      }
+    },
+    "debugging": {
+      "development": {
+        "detailedErrors": true,
+        "displayApiUrls": true,
+        "logRequests": true,
+        "showEnvironmentInfo": true,
+        "verboseLogging": true
+      },
+      "production": {
+        "hideSensitiveInfo": true,
+        "appropriateErrors": true,
+        "secureLogging": true,
+        "monitorApiHealth": true,
+        "trackPerformance": true
+      }
+    },
+    "security": {
+      "general": {
+        "noCommitSecrets": true,
+        "useEnvVars": true,
+        "validateUserInput": true,
+        "secureErrorHandling": true,
+        "protectSensitiveRoutes": true
+      },
+      "api": {
+        "implementRateLimiting": true,
+        "useAuthentication": true,
+        "validateRequestData": true,
+        "handleSensitiveDataCarefully": true,
+        "monitorUsage": true
+      }
+    },
+    "performance": {
+      "backend": {
+        "useAsync": true,
+        "implementCaching": true,
+        "optimizeQueries": true,
+        "monitorPerformance": true,
+        "handleTimeouts": true
+      }
+    },
+    "deployment": {
+      "backend": {
+        "validateApiRoutes": true,
+        "testEnvVars": true,
+        "monitorErrors": true,
+        "trackUsage": true,
+        "implementHealthChecks": true
+      }
+    }
+  },
+  "lintRules": {
+    "python": {
+      "enablePylint": true,
+      "enableMypy": true,
+      "enableBlack": true,
+      "enableIsort": true,
+      "enableRuff": true
+    }
+  },
+  "completionRules": {
+    "preferredStyles": {
+      "imports": "absolute",
+      "docstrings": "google",
+      "errorHandling": "explicit",
+      "loggingStyle": "loguru",
+      "asyncStyle": "fastapi_standard"
+    },
+    "codeGeneration": {
+      "includeTypeHints": true,
+      "includeDocstrings": true,
+      "includeErrorHandling": true,
+      "preferAsyncIO": true,
+      "followProjectPatterns": true
+    }
+  },
+  "fileTemplates": {
+    "model": {
+      "path": "app/models/${name}.py",
+      "template": "from app.database.supabase import supabase_client\nfrom app.schemas.${name} import ${Name}Create, ${Name}Update\nfrom loguru import logger\nfrom typing import List, Optional, Dict, Any\n\nclass ${Name}Model:\n    \"\"\"Model for ${name} data operations\"\"\"\n    \n    TABLE_NAME = \"${name}s\"\n    \n    @staticmethod\n    async def create(${name}: ${Name}Create) -> Dict[str, Any]:\n        \"\"\"Create a new ${name}\"\"\"\n        try:\n            response = supabase_client.table(${Name}Model.TABLE_NAME).insert(${name}.dict()).execute()\n            return response.data[0]\n        except Exception as e:\n            logger.error(f\"Error creating ${name}: {str(e)}\")\n            raise\n    \n    @staticmethod\n    async def get_all() -> List[Dict[str, Any]]:\n        \"\"\"Get all ${name}s\"\"\"\n        try:\n            response = supabase_client.table(${Name}Model.TABLE_NAME).select(\"*\").execute()\n            return response.data\n        except Exception as e:\n            logger.error(f\"Error getting all ${name}s: {str(e)}\")\n            raise\n    \n    @staticmethod\n    async def get_by_id(${name}_id: str) -> Optional[Dict[str, Any]]:\n        \"\"\"Get a ${name} by ID\"\"\"\n        try:\n            response = supabase_client.table(${Name}Model.TABLE_NAME).select(\"*\").eq(\"id\", ${name}_id).execute()\n            if response.data and len(response.data) > 0:\n                return response.data[0]\n            return None\n        except Exception as e:\n            logger.error(f\"Error getting ${name} by ID: {str(e)}\")\n            raise\n    \n    @staticmethod\n    async def update(${name}_id: str, ${name}_update: ${Name}Update) -> Optional[Dict[str, Any]]:\n        \"\"\"Update a ${name}\"\"\"\n        try:\n            # Only include non-None fields in the update\n            update_data = {k: v for k, v in ${name}_update.dict().items() if v is not None}\n            if not update_data:\n                # Nothing to update\n                return await ${Name}Model.get_by_id(${name}_id)\n                \n            response = supabase_client.table(${Name}Model.TABLE_NAME).update(update_data).eq(\"id\", ${name}_id).execute()\n            if response.data and len(response.data) > 0:\n                return response.data[0]\n            return None\n        except Exception as e:\n            logger.error(f\"Error updating ${name}: {str(e)}\")\n            raise\n    \n    @staticmethod\n    async def delete(${name}_id: str) -> bool:\n        \"\"\"Delete a ${name}\"\"\"\n        try:\n            response = supabase_client.table(${Name}Model.TABLE_NAME).delete().eq(\"id\", ${name}_id).execute()\n            return len(response.data) > 0\n        except Exception as e:\n            logger.error(f\"Error deleting ${name}: {str(e)}\")\n            raise"
+    },
+    "schema": {
+      "path": "app/schemas/${name}.py",
+      "template": "from pydantic import BaseModel, Field\nfrom typing import Optional, Dict, List, Any, Union\n\nclass ${Name}Base(BaseModel):\n    \"\"\"Base schema for ${name} data\"\"\"\n    # Define your fields here\n    name: str\n    description: Optional[str] = None\n\nclass ${Name}Create(${Name}Base):\n    \"\"\"Schema for creating a new ${name}\"\"\"\n    pass\n\nclass ${Name}Response(${Name}Base):\n    \"\"\"Schema for ${name} response data\"\"\"\n    id: str\n\n    class Config:\n        from_attributes = True\n\nclass ${Name}Update(BaseModel):\n    \"\"\"Schema for updating a ${name}\"\"\"\n    name: Optional[str] = None\n    description: Optional[str] = None"
+    },
+    "router": {
+      "path": "app/routers/${name}.py",
+      "template": "from fastapi import APIRouter, HTTPException, Depends, status\nfrom app.schemas.${name} import ${Name}Create, ${Name}Response, ${Name}Update\nfrom app.models.${name} import ${Name}Model\nfrom typing import List\nfrom loguru import logger\nfrom app.utils.auth import get_current_admin_user\n\nrouter = APIRouter(\n    prefix=\"/api/${name}s\",\n    tags=[\"${name}s\"]\n)\n\n@router.post(\"\", response_model=${Name}Response, status_code=status.HTTP_201_CREATED)\nasync def create_${name}(${name}: ${Name}Create, _: dict = Depends(get_current_admin_user)):\n    \"\"\"\n    Create a new ${name}.\n    \n    Requires admin authentication.\n    \"\"\"\n    try:\n        result = await ${Name}Model.create(${name})\n        return result\n    except Exception as e:\n        logger.error(f\"Error creating ${name}: {str(e)}\")\n        raise HTTPException(\n            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,\n            detail=f\"Failed to create ${name}\"\n        )\n\n@router.get(\"\", response_model=List[${Name}Response])\nasync def get_all_${name}s():\n    \"\"\"Get all ${name}s.\"\"\"\n    try:\n        result = await ${Name}Model.get_all()\n        return result\n    except Exception as e:\n        logger.error(f\"Error getting all ${name}s: {str(e)}\")\n        raise HTTPException(\n            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,\n            detail=f\"Failed to retrieve ${name}s\"\n        )\n\n@router.get(\"/{${name}_id}\", response_model=${Name}Response)\nasync def get_${name}(${name}_id: str):\n    \"\"\"Get a specific ${name} by ID.\"\"\"\n    try:\n        result = await ${Name}Model.get_by_id(${name}_id)\n        if not result:\n            raise HTTPException(\n                status_code=status.HTTP_404_NOT_FOUND,\n                detail=f\"${Name} with ID {${name}_id} not found\"\n            )\n        return result\n    except HTTPException:\n        raise\n    except Exception as e:\n        logger.error(f\"Error getting ${name} by ID: {str(e)}\")\n        raise HTTPException(\n            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,\n            detail=f\"Failed to retrieve ${name}\"\n        )\n\n@router.put(\"/{${name}_id}\", response_model=${Name}Response)\nasync def update_${name}(${name}_id: str, ${name}_update: ${Name}Update, _: dict = Depends(get_current_admin_user)):\n    \"\"\"\n    Update a ${name}.\n    \n    Requires admin authentication.\n    \"\"\"\n    try:\n        # Check if ${name} exists\n        existing_${name} = await ${Name}Model.get_by_id(${name}_id)\n        if not existing_${name}:\n            raise HTTPException(\n                status_code=status.HTTP_404_NOT_FOUND,\n                detail=f\"${Name} with ID {${name}_id} not found\"\n            )\n            \n        result = await ${Name}Model.update(${name}_id, ${name}_update)\n        return result\n    except HTTPException:\n        raise\n    except Exception as e:\n        logger.error(f\"Error updating ${name}: {str(e)}\")\n        raise HTTPException(\n            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,\n            detail=f\"Failed to update ${name}\"\n        )\n\n@router.delete(\"/{${name}_id}\", status_code=status.HTTP_204_NO_CONTENT)\nasync def delete_${name}(${name}_id: str, _: dict = Depends(get_current_admin_user)):\n    \"\"\"\n    Delete a ${name}.\n    \n    Requires admin authentication.\n    \"\"\"\n    try:\n        # Check if ${name} exists\n        existing_${name} = await ${Name}Model.get_by_id(${name}_id)\n        if not existing_${name}:\n            raise HTTPException(\n                status_code=status.HTTP_404_NOT_FOUND,\n                detail=f\"${Name} with ID {${name}_id} not found\"\n            )\n            \n        success = await ${Name}Model.delete(${name}_id)\n        if not success:\n            raise HTTPException(\n                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,\n                detail=f\"Failed to delete ${name}\"\n            )\n    except HTTPException:\n        raise\n    except Exception as e:\n        logger.error(f\"Error deleting ${name}: {str(e)}\")\n        raise HTTPException(\n            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,\n            detail=f\"Failed to delete ${name}\"\n        )"
+    },
+    "service": {
+      "path": "app/services/${name}_service.py",
+      "template": "from app.config import settings\nfrom typing import Dict, Any, Optional, List\nfrom loguru import logger\n\nclass ${Name}Service:\n    \"\"\"Service for ${name} operations\"\"\"\n    \n    @staticmethod\n    async def process_data(input_data: Dict[str, Any]) -> Dict[str, Any]:\n        \"\"\"\n        Process ${name} data.\n        \n        Args:\n            input_data: The input data to process\n            \n        Returns:\n            Processed data dictionary\n        \"\"\"\n        try:\n            # Implementation here\n            return {\n                \"processed\": True,\n                \"data\": input_data\n            }\n        except Exception as e:\n            logger.error(f\"Error in process_data: {str(e)}\")\n            return {\n                \"error\": f\"Service error: {str(e)}\",\n                \"raw_input\": input_data\n            }"
+    },
+    "test": {
+      "path": "app/tests/test_${name}.py",
+      "template": "import pytest\nfrom fastapi.testclient import TestClient\nfrom app.main import app\nfrom app.models.${name} import ${Name}Model\nfrom app.schemas.${name} import ${Name}Create, ${Name}Update\n\n# Mock data for testing\ntest_${name}_data = {\n    # Add test data here\n    \"name\": \"Test ${Name}\",\n    \"description\": \"Test description\"\n}\n\ndef test_create_${name}(client, monkeypatch):\n    \"\"\"Test creating a ${name}.\"\"\"\n    # Mock the model create method\n    async def mock_create(_):\n        return {\"id\": \"test-id\", **test_${name}_data}\n        \n    monkeypatch.setattr(${Name}Model, \"create\", mock_create)\n    \n    response = client.post(\n        f\"/api/${name}s\",\n        json=test_${name}_data,\n        headers={\"Authorization\": \"Bearer test-token\"}\n    )\n    \n    assert response.status_code == 201\n    data = response.json()\n    assert data[\"name\"] == test_${name}_data[\"name\"]\n    assert \"id\" in data\n\ndef test_get_${name}(client, monkeypatch):\n    \"\"\"Test getting a ${name} by ID.\"\"\"\n    # Mock the model get_by_id method\n    async def mock_get_by_id(_):\n        return {\"id\": \"test-id\", **test_${name}_data}\n        \n    monkeypatch.setattr(${Name}Model, \"get_by_id\", mock_get_by_id)\n    \n    response = client.get(f\"/api/${name}s/test-id\")\n    \n    assert response.status_code == 200\n    data = response.json()\n    assert data[\"name\"] == test_${name}_data[\"name\"]\n    assert data[\"id\"] == \"test-id\""
+    }
+  }
+} 
