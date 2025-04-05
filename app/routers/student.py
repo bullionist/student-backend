@@ -293,3 +293,68 @@ async def handle_student_conversation(student_id: str, input_data: AnalyzeInput)
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process conversation"
         )
+
+@router.put("/{student_id}/update", response_model=StudentResponse)
+async def update_student_profile(student_id: str, student_update: StudentUpdate):
+    """
+    Update a student's profile information.
+    
+    Request:
+    {
+        "academic_background": "Bachelor's in Computer Science",
+        "preferred_location": ["New York", "San Francisco"],
+        "field_of_study": "Data Science",
+        "exam_scores": [
+            {
+                "exam_name": "GRE",
+                "score": 320,
+                "date_taken": "2023-01-15T00:00:00",
+                "validity_period": 5
+            }
+        ],
+        "additional_preferences": {
+            "start_date_preference": "2024-09-01T00:00:00",
+            "program_duration": "2 years",
+            "budget_range": "50000-100000"
+        }
+    }
+    
+    Response:
+    {
+        "id": "student_id",
+        "academic_background": "Bachelor's in Computer Science",
+        "preferred_location": ["New York", "San Francisco"],
+        "field_of_study": "Data Science",
+        "exam_scores": [...],
+        "additional_preferences": {...},
+        "conversation_history": {...},
+        "created_at": "2023-05-01T12:00:00",
+        "updated_at": "2023-05-02T14:30:00"
+    }
+    """
+    try:
+        # Check if student exists
+        existing_student = await StudentModel.get_by_id(student_id)
+        if not existing_student:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Student with ID {student_id} not found"
+            )
+        
+        # Update the student record
+        updated_student = await StudentModel.update(student_id, student_update)
+        if not updated_student:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update student profile"
+            )
+        
+        return updated_student
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update student profile: {str(e)}"
+        )
