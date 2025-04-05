@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     
     # Groq API configuration
     GROQ_API_KEY: str
-    GROQ_API_URL: str = "https://api.groq.com/v1"
+    GROQ_API_URL: str = "https://api.groq.com/openai/v1"
     
     # Application settings
     APP_ENV: str = "development"

@@ -105,18 +105,27 @@ class StudentModel:
             if not student_data:
                 return None
                 
-            # Create new message
-            new_message = ConversationMessage(
-                role=role,
-                content=content,
-                timestamp=datetime.now().isoformat()
-            )
+            # Create new message with ISO format timestamp
+            new_message = {
+                "role": role,
+                "content": content,
+                "timestamp": datetime.now().isoformat()
+            }
             
             # Get current conversation history or create a new one
-            conversation_history = student_data.get("conversation_history", {"messages": []})
+            conversation_history = student_data.get("conversation_history", {})
+            if not isinstance(conversation_history, dict):
+                conversation_history = {"messages": []}
+            
+            # Ensure messages list exists
+            if "messages" not in conversation_history:
+                conversation_history["messages"] = []
             
             # Add the new message
-            conversation_history["messages"].append(new_message.dict())
+            conversation_history["messages"].append(new_message)
+            
+            # Update last_updated timestamp
+            conversation_history["last_updated"] = datetime.now().isoformat()
             
             # Update the student record
             response = supabase_client.table(StudentModel.TABLE_NAME).update(

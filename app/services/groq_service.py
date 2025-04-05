@@ -3,6 +3,7 @@ from app.config import settings
 from typing import Dict, Any, Optional, List
 from loguru import logger
 import json
+from app.models.program import ProgramModel
 
 class GroqService:
     """Service to interact with Groq API for NLP processing"""
@@ -60,12 +61,15 @@ class GroqService:
             
             # Request payload
             payload = {
-                "model": "mixtral-8x7b-32768",
+                "model": "llama3-8b-8192",
                 "messages": [
                     {"role": "system", "content": "You are a helpful assistant that extracts structured information from text."},
                     {"role": "user", "content": prompt}
                 ],
-                "temperature": 0.1
+                "temperature": 0.1,
+                "max_tokens": 1024,
+                "top_p": 1,
+                "stream": False
             }
             
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -197,12 +201,15 @@ class GroqService:
             
             # Request payload
             payload = {
-                "model": "mixtral-8x7b-32768",
+                "model": "llama3-8b-8192",
                 "messages": [
                     {"role": "system", "content": "You are an AI counselor that generates personalized program recommendations."},
                     {"role": "user", "content": prompt}
                 ],
-                "temperature": 0.3
+                "temperature": 0.3,
+                "max_tokens": 1024,
+                "top_p": 1,
+                "stream": False
             }
             
             async with httpx.AsyncClient(timeout=60.0) as client:
@@ -260,7 +267,7 @@ class GroqService:
         conversation_history: List[Dict[str, str]]
     ) -> Dict[str, Any]:
         """
-        Chat with a student using Groq API.
+        Chat with a student using Groq API and provide program recommendations.
         
         Args:
             student_data (Dict[str, Any]): The student's profile data
@@ -271,7 +278,10 @@ class GroqService:
             Dict[str, Any]: The AI's response and any additional information
         """
         try:
-            # Construct the system prompt with student context
+            # Get available programs for recommendations
+            available_programs = await ProgramModel.get_all()
+            
+            # Construct the system prompt with student context and available programs
             system_prompt = f"""
             You are an AI counselor helping students choose the right educational program.
             
@@ -282,13 +292,30 @@ class GroqService:
             - Exam Scores: {json.dumps(student_data.get('exam_scores', {}))}
             - Additional Preferences: {json.dumps(student_data.get('additional_preferences', {}))}
             
-            Your role is to:
-            1. Understand the student's needs and concerns
-            2. Provide guidance on program selection
-            3. Answer questions about educational pathways
-            4. Offer personalized advice based on their profile
+            Available Programs:
+            {json.dumps(available_programs, indent=2)}
             
-            Be empathetic, professional, and focused on helping the student make informed decisions.
+            Your role is to:
+            1. Keep responses concise and focused on the student's specific query
+            2. Provide personalized program recommendations based on the student's profile
+            3. Match programs to the student's eligibility criteria and preferences
+            4. Answer questions about educational pathways clearly and directly
+            
+            When recommending programs:
+            - Prioritize programs that match the student's academic background
+            - Consider location preferences as a key factor
+            - Match field of study interests with program offerings
+            - Take into account budget constraints if mentioned
+            - Consider program duration and mode of delivery preferences
+            
+            Communication style:
+            - Be concise and direct - avoid lengthy explanations
+            - Focus on answering the specific question asked
+            - Use bullet points for multiple recommendations
+            - Highlight key eligibility criteria and application deadlines
+            - If the student asks about programs, always reference specific programs from the available options
+            
+            Remember: Your goal is to help students find the right educational path efficiently and effectively.
             """
             
             # Prepare the conversation history for the API
@@ -318,9 +345,12 @@ class GroqService:
                         "Content-Type": "application/json"
                     },
                     json={
-                        "model": "mixtral-8x7b-32768",
+                        "model": "llama3-8b-8192",
                         "messages": messages,
-                        "temperature": 0.7
+                        "temperature": 0.7,
+                        "max_tokens": 1024,
+                        "top_p": 1,
+                        "stream": False
                     }
                 )
                 
