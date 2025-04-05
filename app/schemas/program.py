@@ -30,6 +30,7 @@ class ProgramBase(BaseModel):
     curriculum: Curriculum
     mode_of_delivery: str
     application_details: str
+    location: str
     additional_notes: Optional[str] = None
 
 class ProgramCreate(ProgramBase):
@@ -54,4 +55,5 @@ class ProgramUpdate(BaseModel):
     curriculum: Optional[Curriculum] = None
     mode_of_delivery: Optional[str] = None
     application_details: Optional[str] = None
+    location: Optional[str] = None
     additional_notes: Optional[str] = None
