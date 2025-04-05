@@ -7,7 +7,7 @@ import sys
 import os
 
 from app.config import settings
-from app.routers import program, student
+from app.routers import program, student, admin
 
 # Configure logger
 logger.remove()
@@ -70,6 +70,7 @@ async def log_requests(request: Request, call_next):
 # Include routers
 app.include_router(program.router)
 app.include_router(student.router)
+app.include_router(admin.router)
 
 @app.get("/", tags=["Root"])
 async def read_root():

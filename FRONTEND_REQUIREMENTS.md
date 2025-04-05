@@ -17,6 +17,101 @@ The AI-Powered Student Counseling Platform is a web application that helps stude
 - Admin role-based access control
 - Session management and token handling
 
+### Admin Authentication
+```typescript
+// Admin login request and response types
+interface AdminLoginRequest {
+  email: string;
+  password: string;
+}
+
+interface AdminLoginResponse {
+  id: string;
+  email: string;
+  access_token: string;
+  token_type: string;
+}
+
+// Admin login function
+const loginAdmin = async (email: string, password: string): Promise<AdminLoginResponse> => {
+  const response = await fetch(`${API_BASE_URL}/api/admin/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Login failed');
+  }
+
+  const data = await response.json();
+  // Store the token in localStorage or secure storage
+  localStorage.setItem('adminToken', data.access_token);
+  return data;
+};
+```
+
+### Protected Admin Routes
+```typescript
+// ProtectedRoute component for admin routes
+const ProtectedAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const token = localStorage.getItem('adminToken');
+  
+  if (!token) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Usage in routing
+<Routes>
+  <Route path="/admin/login" element={<AdminLogin />} />
+  <Route
+    path="/admin/programs"
+    element={
+      <ProtectedAdminRoute>
+        <ProgramsList />
+      </ProtectedAdminRoute>
+    }
+  />
+  {/* Other protected routes */}
+</Routes>
+```
+
+### API Service with Authentication
+```typescript
+// api.ts
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL,
+});
+
+// Add request interceptor to add token to all requests
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('adminToken');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Add response interceptor to handle token expiration
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('adminToken');
+      window.location.href = '/admin/login';
+    }
+    return Promise.reject(error);
+  }
+);
+```
+
 ## Core Features
 
 ### 1. Student Dashboard
@@ -46,15 +141,24 @@ http://localhost:8000/api
 ```
 
 ### Authentication Endpoints
-- Supabase authentication endpoints (handled by Supabase client)
+```
+POST   /api/admin/login      - Admin login
+POST   /api/admin/register   - Register new admin (admin only)
+GET    /api/admin/me         - Get current admin profile
+```
 
-### Program Endpoints
+### Program Endpoints (All require admin authentication)
 ```
 GET    /api/programs          - List all programs
-POST   /api/programs          - Create new program (admin only)
+POST   /api/programs          - Create new program
 GET    /api/programs/{id}     - Get program details
-PUT    /api/programs/{id}     - Update program (admin only)
-DELETE /api/programs/{id}     - Delete program (admin only)
+PUT    /api/programs/{id}     - Update program
+DELETE /api/programs/{id}     - Delete program
+
+// Required headers for all program endpoints
+headers: {
+  'Authorization': 'Bearer <admin_token>'
+}
 ```
 
 ### Student Endpoints
@@ -70,9 +174,33 @@ POST   /api/students/{id}/analyze - Analyze student input
 ```typescript
 interface Program {
   id: string;
-  name: string;
-  description?: string;
-  // Add other program fields
+  program_title: string;
+  institution: string;
+  program_overview: string;
+  eligibility_criteria: {
+    qualifications: string[];
+    experience?: string;
+    age_limit?: string;
+    other_requirements: string[];
+  };
+  duration: string;
+  fees: number;
+  curriculum: {
+    core_modules: Array<{
+      name: string;
+      description?: string;
+      credits?: number;
+    }>;
+    elective_modules?: Array<{
+      name: string;
+      description?: string;
+      credits?: number;
+    }>;
+  };
+  mode_of_delivery: string;
+  application_details: string;
+  location: string;
+  additional_notes?: string;
 }
 ```
 
@@ -121,14 +249,17 @@ interface Student {
 - Local state for form handling
 - Cache management for API responses
 - Real-time updates for chat
+- Admin authentication state management
 
 
 ## Security Considerations
-- Secure storage of tokens
+- Secure storage of tokens (preferably HttpOnly cookies in production)
 - XSS prevention
 - CSRF protection
 - Input sanitization
 - Secure communication with backend
+- Token expiration and refresh handling
+- Admin session management
 
 ## Development Workflow
 1. Set up development environment

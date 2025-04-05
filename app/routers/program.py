@@ -29,8 +29,12 @@ async def create_program(program: ProgramCreate, _: dict = Depends(get_current_a
         )
 
 @router.get("", response_model=List[ProgramResponse])
-async def get_all_programs():
-    """Get all programs."""
+async def get_all_programs(_: dict = Depends(get_current_admin_user)):
+    """
+    Get all programs.
+    
+    Requires admin authentication.
+    """
     try:
         result = await ProgramModel.get_all()
         return result
@@ -42,8 +46,12 @@ async def get_all_programs():
         )
 
 @router.get("/{program_id}", response_model=ProgramResponse)
-async def get_program(program_id: str):
-    """Get a specific program by ID."""
+async def get_program(program_id: str, _: dict = Depends(get_current_admin_user)):
+    """
+    Get a specific program by ID.
+    
+    Requires admin authentication.
+    """
     try:
         result = await ProgramModel.get_by_id(program_id)
         if not result:

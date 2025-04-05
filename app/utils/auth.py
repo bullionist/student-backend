@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.database.supabase import supabase_client
 from loguru import logger
 from typing import Dict, Any, Optional
+from app.models.admin import AdminModel
 
 security = HTTPBearer()
 
@@ -64,3 +65,20 @@ async def get_current_admin_user(credentials: HTTPAuthorizationCredentials = Dep
             detail="Authentication error",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+    """
+    Dependency to get the current admin user from the token.
+    This will be used to protect admin routes.
+    """
+    token = credentials.credentials
+    admin = await AdminModel.get_current_admin(token)
+    
+    if not admin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    return admin
