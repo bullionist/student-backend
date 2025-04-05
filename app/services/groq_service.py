@@ -30,32 +30,42 @@ class GroqService:
             # Define the prompt for information extraction
             prompt = f"""
             Extract the following information from the student's input:
-            - Academic background (degrees, qualifications, institutions)
+            - Academic background (current education level, subjects, grades)
             - Preferred location for study
-            - Field of study or interest
-            - Exam scores (with name and score)
-            - Additional preferences (study mode, budget, etc.)
+            - Field of study interest
+            - Exam scores (if mentioned)
+            - Additional preferences (if any)
             
-            Format the response as a JSON object with these keys: 
-            academic_background, preferred_location, field_of_study, exam_scores, additional_preferences.
+            Student input: {input_text}
             
-            For exam_scores, use an array of objects with exam_name and score properties.
-            For additional_preferences, create a structured object.
+            Return the information in JSON format with the following structure:
+            {{
+                "academic_background": {{
+                    "current_education": "string",
+                    "subjects": ["string"],
+                    "grades": "string"
+                }},
+                "preferred_location": "string",
+                "field_of_study": "string",
+                "exam_scores": {{
+                    "exam_name": "score"
+                }},
+                "additional_preferences": {{
+                    "preference_key": "preference_value"
+                }}
+            }}
             
-            Student Input: {input_text}
-            
-            JSON Response:
+            Only include fields that are explicitly mentioned in the input.
             """
             
             # Request payload
             payload = {
-                "model": "llama3-70b-8192",
+                "model": "mixtral-8x7b-32768",
                 "messages": [
-                    {"role": "system", "content": "You are an AI assistant that extracts structured information from student inputs."},
+                    {"role": "system", "content": "You are a helpful assistant that extracts structured information from text."},
                     {"role": "user", "content": prompt}
                 ],
-                "temperature": 0.1,
-                "max_tokens": 1000
+                "temperature": 0.1
             }
             
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -98,8 +108,240 @@ class GroqService:
                     }
                 
         except Exception as e:
-            logger.error(f"Error in extract_student_details: {str(e)}")
+            logger.error(f"Error extracting student details: {str(e)}")
             return {
-                "error": f"Service error: {str(e)}",
+                "error": str(e),
                 "raw_input": input_text
+            }
+    
+    @staticmethod
+    async def generate_course_recommendations(student_data: Dict[str, Any], available_programs: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Generate personalized course recommendations based on student profile and available programs.
+        
+        Args:
+            student_data: The student's profile data
+            available_programs: List of available educational programs
+            
+        Returns:
+            Dictionary containing recommendations and explanation
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {GroqService.GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            # Format student data for the prompt
+            student_info = {
+                "academic_background": student_data.get("academic_background", "Not specified"),
+                "preferred_location": student_data.get("preferred_location", "Not specified"),
+                "field_of_study": student_data.get("field_of_study", "Not specified"),
+                "exam_scores": student_data.get("exam_scores", []),
+                "additional_preferences": student_data.get("additional_preferences", {})
+            }
+            
+            # Format programs data for the prompt
+            programs_info = []
+            for program in available_programs:
+                programs_info.append({
+                    "id": program.get("id", ""),
+                    "program_title": program.get("program_title", ""),
+                    "institution": program.get("institution", ""),
+                    "program_overview": program.get("program_overview", ""),
+                    "eligibility_criteria": program.get("eligibility_criteria", {}),
+                    "duration": program.get("duration", ""),
+                    "fees": program.get("fees", ""),
+                    "mode_of_delivery": program.get("mode_of_delivery", ""),
+                    "location": program.get("location", ""),
+                    "curriculum": {
+                        "core_modules": [m.get("name", "") for m in program.get("curriculum", {}).get("core_modules", [])]
+                    }
+                })
+            
+            # Define the prompt for course recommendations
+            prompt = f"""
+            Based on the student's profile and available programs, generate personalized recommendations.
+            
+            Student Profile:
+            {json.dumps(student_info, indent=2)}
+            
+            Available Programs:
+            {json.dumps(programs_info, indent=2)}
+            
+            Generate recommendations in the following JSON format:
+            {{
+                "recommended_programs": [
+                    {{
+                        "program_id": "string",
+                        "match_score": number,
+                        "explanation": "string",
+                        "key_benefits": ["string"],
+                        "requirements_met": ["string"],
+                        "requirements_missing": ["string"]
+                    }}
+                ],
+                "summary": "string",
+                "next_steps": ["string"]
+            }}
+            
+            Consider:
+            1. Academic background match
+            2. Location preferences
+            3. Field of study alignment
+            4. Exam scores and eligibility
+            5. Additional preferences
+            
+            Sort recommendations by match_score in descending order.
+            """
+            
+            # Request payload
+            payload = {
+                "model": "mixtral-8x7b-32768",
+                "messages": [
+                    {"role": "system", "content": "You are an AI counselor that generates personalized program recommendations."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.3
+            }
+            
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    f"{GroqService.GROQ_API_URL}/chat/completions",
+                    headers=headers,
+                    json=payload
+                )
+                
+                if response.status_code != 200:
+                    logger.error(f"Groq API error: {response.status_code} - {response.text}")
+                    return {
+                        "error": f"API error: {response.status_code}",
+                        "message": "Failed to generate recommendations"
+                    }
+                
+                result = response.json()
+                content = result.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+                
+                # Try to parse the JSON from the response
+                try:
+                    # Find JSON content - sometimes the model wraps it in markdown or adds text
+                    json_start = content.find('{')
+                    json_end = content.rfind('}') + 1
+                    
+                    if json_start >= 0 and json_end > 0:
+                        json_content = content[json_start:json_end]
+                        recommendations = json.loads(json_content)
+                    else:
+                        # Fall back to the entire content if JSON markers not found
+                        recommendations = json.loads(content)
+                    
+                    # Add the raw response for debugging
+                    recommendations["raw_response"] = content
+                    
+                    return recommendations
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse JSON from Groq response: {str(e)}")
+                    return {
+                        "error": "Failed to parse recommendations",
+                        "raw_output": content
+                    }
+                
+        except Exception as e:
+            logger.error(f"Error generating course recommendations: {str(e)}")
+            return {
+                "error": str(e),
+                "message": "Failed to generate recommendations"
+            }
+    
+    @staticmethod
+    async def chat_with_student(
+        student_data: Dict[str, Any],
+        message: str,
+        conversation_history: List[Dict[str, str]]
+    ) -> Dict[str, Any]:
+        """
+        Chat with a student using Groq API.
+        
+        Args:
+            student_data (Dict[str, Any]): The student's profile data
+            message (str): The student's message
+            conversation_history (List[Dict[str, str]]): Previous conversation messages
+            
+        Returns:
+            Dict[str, Any]: The AI's response and any additional information
+        """
+        try:
+            # Construct the system prompt with student context
+            system_prompt = f"""
+            You are an AI counselor helping students choose the right educational program.
+            
+            Student Profile:
+            - Academic Background: {json.dumps(student_data.get('academic_background', {}))}
+            - Preferred Location: {student_data.get('preferred_location', 'Not specified')}
+            - Field of Interest: {student_data.get('field_of_study', 'Not specified')}
+            - Exam Scores: {json.dumps(student_data.get('exam_scores', {}))}
+            - Additional Preferences: {json.dumps(student_data.get('additional_preferences', {}))}
+            
+            Your role is to:
+            1. Understand the student's needs and concerns
+            2. Provide guidance on program selection
+            3. Answer questions about educational pathways
+            4. Offer personalized advice based on their profile
+            
+            Be empathetic, professional, and focused on helping the student make informed decisions.
+            """
+            
+            # Prepare the conversation history for the API
+            messages = [
+                {"role": "system", "content": system_prompt}
+            ]
+            
+            # Add conversation history (limit to last 10 messages to stay within context window)
+            for msg in conversation_history[-10:]:
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+                
+            # Add the current message
+            messages.append({
+                "role": "user",
+                "content": message
+            })
+            
+            # Make the API request to Groq
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{GroqService.GROQ_API_URL}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {GroqService.GROQ_API_KEY}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "mixtral-8x7b-32768",
+                        "messages": messages,
+                        "temperature": 0.7
+                    }
+                )
+                
+                if response.status_code != 200:
+                    logger.error(f"Groq API error: {response.status_code} - {response.text}")
+                    return {
+                        "error": f"API error: {response.status_code}",
+                        "message": "I'm sorry, I'm having trouble processing your request right now."
+                    }
+                    
+                result = response.json()
+                ai_response = result["choices"][0]["message"]["content"]
+                
+                return {
+                    "response": ai_response,
+                    "success": True
+                }
+                
+        except Exception as e:
+            logger.error(f"Error in chat with student: {str(e)}")
+            return {
+                "error": str(e),
+                "message": "I'm sorry, I'm having trouble processing your request right now."
             }

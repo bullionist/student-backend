@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, status
 from app.schemas.student import StudentCreate, StudentResponse, StudentUpdate, AnalyzeInput
 from app.models.student import StudentModel
+from app.models.program import ProgramModel
 from app.services.groq_service import GroqService
-from typing import Dict, Any
+from typing import Dict, Any, List
 from loguru import logger
 
 router = APIRouter(
@@ -128,4 +129,137 @@ async def analyze_student_input(student_id: str, input_data: AnalyzeInput):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to analyze student input"
+        )
+
+@router.post("/{student_id}/chat", response_model=Dict[str, Any])
+async def chat_with_student(student_id: str, input_data: AnalyzeInput):
+    """
+    Chat with the student using Groq API.
+    
+    Returns the AI's response and updates the conversation history.
+    """
+    try:
+        # Check if student exists
+        existing_student = await StudentModel.get_by_id(student_id)
+        if not existing_student:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Student with ID {student_id} not found"
+            )
+            
+        # Add the user message to conversation history
+        await StudentModel.add_conversation_message(
+            student_id=student_id,
+            role="user",
+            content=input_data.text
+        )
+            
+        # Get conversation history
+        conversation_history = existing_student.get("conversation_history", {}).get("messages", [])
+        
+        # Generate response using Groq API
+        chat_response = await GroqService.chat_with_student(
+            student_data=existing_student,
+            message=input_data.text,
+            conversation_history=conversation_history
+        )
+        
+        # Check if chat was successful
+        if "error" in chat_response:
+            # Still record the response but include error
+            await StudentModel.add_conversation_message(
+                student_id=student_id,
+                role="system",
+                content=f"Error in chat: {chat_response.get('error')}"
+            )
+            return {
+                "success": False,
+                "error": chat_response.get("error"),
+                "message": "Failed to generate chat response"
+            }
+            
+        # Add the AI's response to conversation history
+        await StudentModel.add_conversation_message(
+            student_id=student_id,
+            role="assistant",
+            content=chat_response.get("response", "I'm sorry, I couldn't generate a response.")
+        )
+            
+        # Return the chat response
+        return {
+            "success": True,
+            "message": "Successfully generated chat response",
+            "response": chat_response.get("response", "")
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in chat with student: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to chat with student"
+        )
+
+@router.get("/{student_id}/recommendations", response_model=Dict[str, Any])
+async def get_course_recommendations(student_id: str):
+    """
+    Generate personalized course recommendations for a student.
+    
+    Returns recommended programs based on the student's profile.
+    """
+    try:
+        # Check if student exists
+        existing_student = await StudentModel.get_by_id(student_id)
+        if not existing_student:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Student with ID {student_id} not found"
+            )
+            
+        # Get all available programs
+        available_programs = await ProgramModel.get_all()
+        
+        if not available_programs:
+            return {
+                "success": False,
+                "message": "No programs available for recommendations"
+            }
+            
+        # Generate recommendations using Groq API
+        recommendations = await GroqService.generate_course_recommendations(
+            student_data=existing_student,
+            available_programs=available_programs
+        )
+        
+        # Check if recommendations were successful
+        if "error" in recommendations:
+            return {
+                "success": False,
+                "error": recommendations.get("error"),
+                "message": "Failed to generate recommendations"
+            }
+            
+        # Add a message to the conversation about the recommendations
+        recommendation_message = "I've analyzed your profile and found some programs that might be a good fit for you."
+        await StudentModel.add_conversation_message(
+            student_id=student_id,
+            role="assistant",
+            content=recommendation_message
+        )
+            
+        # Return the recommendations
+        return {
+            "success": True,
+            "message": "Successfully generated recommendations",
+            "recommendations": recommendations
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating recommendations: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate recommendations"
         )

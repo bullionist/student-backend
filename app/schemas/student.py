@@ -1,63 +1,91 @@
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, Dict, List, Any, Union
+from datetime import datetime
 
 class ExamScores(BaseModel):
-    """Schema for exam scores"""
+    """Model for student exam scores."""
     exam_name: str
-    score: Union[str, float, int]
-    date: Optional[str] = None
-    details: Optional[Dict[str, Any]] = None
+    score: str
+    date_taken: Optional[datetime] = None
+    validity_period: Optional[int] = None  # in months
 
 class AdditionalPreferences(BaseModel):
-    """Schema for additional preferences"""
-    study_mode: Optional[str] = None  # e.g., "Full-time", "Part-time"
-    budget: Optional[Union[str, float, int]] = None
-    start_date: Optional[str] = None
-    specific_interests: Optional[List[str]] = Field(default_factory=list)
-    other: Optional[Dict[str, Any]] = None
+    """Model for student's additional preferences."""
+    study_mode: Optional[str] = None  # online, offline, hybrid
+    budget_range: Optional[str] = None
+    duration_preference: Optional[str] = None  # short-term, long-term
+    start_date_preference: Optional[datetime] = None
+    special_requirements: Optional[List[str]] = None
+    career_goals: Optional[List[str]] = None
+    preferred_languages: Optional[List[str]] = None
 
 class ConversationMessage(BaseModel):
-    """Schema for a single conversation message"""
-    role: str  # "system", "user", or "assistant"
+    """Model for a single conversation message."""
+    role: str  # user, assistant, system
     content: str
-    timestamp: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 class ConversationHistory(BaseModel):
-    """Schema for conversation history"""
+    """Model for student's conversation history."""
     messages: List[ConversationMessage] = Field(default_factory=list)
+    last_updated: datetime = Field(default_factory=datetime.utcnow)
+
+class AcademicBackground(BaseModel):
+    """Model for student's academic background."""
+    current_education: str
+    subjects: List[str]
+    grades: str
+    institution: Optional[str] = None
+    year_of_completion: Optional[int] = None
+    achievements: Optional[List[str]] = None
 
 class StudentBase(BaseModel):
-    """Base schema for student data"""
+    """Base model for student data."""
     name: str
     email: Optional[str] = None
-    academic_background: Optional[str] = None
-    preferred_location: Optional[str] = None
-    field_of_study: Optional[str] = None
-    exam_scores: Optional[List[ExamScores]] = Field(default_factory=list)
-    additional_preferences: Optional[AdditionalPreferences] = None
-    conversation_history: ConversationHistory = Field(default_factory=ConversationHistory)
+    academic_background: AcademicBackground
+    preferred_location: str
+    field_of_study: str
+    exam_scores: List[ExamScores] = Field(default_factory=list)
+    additional_preferences: AdditionalPreferences = Field(default_factory=AdditionalPreferences)
+    conversation_history: Optional[ConversationHistory] = Field(default_factory=ConversationHistory)
 
 class StudentCreate(StudentBase):
-    """Schema for creating a new student session"""
+    """Model for creating a new student."""
     pass
 
 class StudentResponse(StudentBase):
-    """Schema for student response data"""
+    """Model for student response data."""
     id: str
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
 
 class StudentUpdate(BaseModel):
-    """Schema for updating student data"""
+    """Model for updating student information."""
     name: Optional[str] = None
     email: Optional[str] = None
-    academic_background: Optional[str] = None
+    academic_background: Optional[AcademicBackground] = None
     preferred_location: Optional[str] = None
     field_of_study: Optional[str] = None
     exam_scores: Optional[List[ExamScores]] = None
     additional_preferences: Optional[AdditionalPreferences] = None
 
 class AnalyzeInput(BaseModel):
-    """Schema for text input to be analyzed"""
+    """Model for student input analysis."""
     text: str
+    context: Optional[Dict[str, Any]] = None
+
+class ChatResponse(BaseModel):
+    """Model for chat response."""
+    success: bool
+    response: str
+    error: Optional[str] = None
+
+class RecommendationResponse(BaseModel):
+    """Model for course recommendations response."""
+    success: bool
+    recommendations: Dict[str, Any]
+    error: Optional[str] = None
