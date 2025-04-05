@@ -94,7 +94,11 @@ async def analyze_student_input(student_id: str, input_data: AnalyzeInput):
             update_data.academic_background = extracted_data["academic_background"]
             
         if "preferred_location" in extracted_data:
-            update_data.preferred_location = extracted_data["preferred_location"]
+            # Handle both string and list formats for backward compatibility
+            if isinstance(extracted_data["preferred_location"], str):
+                update_data.preferred_location = [extracted_data["preferred_location"]]
+            else:
+                update_data.preferred_location = extracted_data["preferred_location"]
             
         if "field_of_study" in extracted_data:
             update_data.field_of_study = extracted_data["field_of_study"]
@@ -150,6 +154,10 @@ async def chat_with_student(student_id: str, input_data: AnalyzeInput):
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Student with ID {student_id} not found"
             )
+            
+        # Ensure preferred_location is a list for backward compatibility
+        if "preferred_location" in existing_student and isinstance(existing_student["preferred_location"], str):
+            existing_student["preferred_location"] = [existing_student["preferred_location"]]
             
         # Add the user message to conversation history
         await StudentModel.add_conversation_message(
@@ -231,6 +239,10 @@ async def handle_student_conversation(student_id: str, input_data: AnalyzeInput)
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Student with ID {student_id} not found"
             )
+            
+        # Ensure preferred_location is a list for backward compatibility
+        if "preferred_location" in existing_student and isinstance(existing_student["preferred_location"], str):
+            existing_student["preferred_location"] = [existing_student["preferred_location"]]
             
         # Add the user message to conversation history
         await StudentModel.add_conversation_message(

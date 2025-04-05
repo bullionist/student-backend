@@ -27,11 +27,24 @@ class StudentModel:
                 if isinstance(student_data["conversation_history"].get("last_updated"), datetime):
                     student_data["conversation_history"]["last_updated"] = student_data["conversation_history"]["last_updated"].isoformat()
             
+            # Ensure preferred_location is a list
+            if "preferred_location" in student_data:
+                if isinstance(student_data["preferred_location"], str):
+                    student_data["preferred_location"] = [student_data["preferred_location"]]
+                elif student_data["preferred_location"] is None:
+                    student_data["preferred_location"] = []
+            
             # Convert datetime objects to ISO format strings
             if "exam_scores" in student_data:
                 for exam in student_data["exam_scores"]:
                     if "date_taken" in exam and exam["date_taken"]:
                         exam["date_taken"] = exam["date_taken"].isoformat()
+                    # Ensure validity_period is an integer if present
+                    if "validity_period" in exam and exam["validity_period"] is not None:
+                        try:
+                            exam["validity_period"] = int(exam["validity_period"])
+                        except (ValueError, TypeError):
+                            exam["validity_period"] = None
             
             if "additional_preferences" in student_data:
                 prefs = student_data["additional_preferences"]
@@ -74,11 +87,24 @@ class StudentModel:
             # Only include non-None fields in the update
             update_data = {k: v for k, v in student_update.dict().items() if v is not None}
             
+            # Ensure preferred_location is a list
+            if "preferred_location" in update_data:
+                if isinstance(update_data["preferred_location"], str):
+                    update_data["preferred_location"] = [update_data["preferred_location"]]
+                elif update_data["preferred_location"] is None:
+                    update_data["preferred_location"] = []
+            
             # Convert datetime objects to ISO format strings
             if "exam_scores" in update_data:
                 for exam in update_data["exam_scores"]:
                     if "date_taken" in exam and exam["date_taken"]:
                         exam["date_taken"] = exam["date_taken"].isoformat()
+                    # Ensure validity_period is an integer if present
+                    if "validity_period" in exam and exam["validity_period"] is not None:
+                        try:
+                            exam["validity_period"] = int(exam["validity_period"])
+                        except (ValueError, TypeError):
+                            exam["validity_period"] = None
             
             if "additional_preferences" in update_data:
                 prefs = update_data["additional_preferences"]
@@ -123,6 +149,10 @@ class StudentModel:
             
             # Add the new message
             conversation_history["messages"].append(new_message)
+            
+            # Maintain only the last 10 messages
+            if len(conversation_history["messages"]) > 10:
+                conversation_history["messages"] = conversation_history["messages"][-10:]
             
             # Update last_updated timestamp
             conversation_history["last_updated"] = datetime.now().isoformat()

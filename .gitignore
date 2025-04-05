@@ -190,3 +190,5 @@ logs/
 .cursor/
 .cursor.local/
 .cursor.project
+scripts/create_tables.sql
+scripts/insert_sample_data.py

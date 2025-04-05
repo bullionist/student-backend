@@ -5,7 +5,7 @@ from datetime import datetime
 class ExamScores(BaseModel):
     """Model for student exam scores."""
     exam_name: str
-    score: str
+    score: str  # Keep as string to handle various score formats (e.g., "A+", "95", "5")
     date_taken: Optional[datetime] = None
     validity_period: Optional[int] = None  # in months
 
@@ -44,7 +44,7 @@ class StudentBase(BaseModel):
     name: str
     email: Optional[str] = None
     academic_background: AcademicBackground
-    preferred_location: str
+    preferred_location: List[str] = Field(default_factory=list)
     field_of_study: str
     exam_scores: List[ExamScores] = Field(default_factory=list)
     additional_preferences: AdditionalPreferences = Field(default_factory=AdditionalPreferences)
@@ -68,7 +68,7 @@ class StudentUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     academic_background: Optional[AcademicBackground] = None
-    preferred_location: Optional[str] = None
+    preferred_location: Optional[List[str]] = None
     field_of_study: Optional[str] = None
     exam_scores: Optional[List[ExamScores]] = None
     additional_preferences: Optional[AdditionalPreferences] = None

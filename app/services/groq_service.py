@@ -31,7 +31,7 @@ class GroqService:
             prompt = f"""
             Extract the following information from the student's input:
             - Academic background (current education level, subjects, grades)
-            - Preferred location for study
+            - Preferred locations for study (can be multiple)
             - Field of study interest
             - Exam scores (if mentioned)
             - Additional preferences (if any)
@@ -45,7 +45,7 @@ class GroqService:
                     "subjects": ["string"],
                     "grades": "string"
                 }},
-                "preferred_location": "string",
+                "preferred_location": ["string"],
                 "field_of_study": "string",
                 "exam_scores": {{
                     "exam_name": "score"
@@ -56,6 +56,7 @@ class GroqService:
             }}
             
             Only include fields that are explicitly mentioned in the input.
+            For preferred_location, return an array of strings even if only one location is mentioned.
             """
             
             # Request payload
@@ -135,28 +136,31 @@ class GroqService:
             # Format student data for the prompt
             student_info = {
                 "academic_background": student_data.get("academic_background", "Not specified"),
-                "preferred_location": student_data.get("preferred_location", "Not specified"),
+                "preferred_location": student_data.get("preferred_location", []),
                 "field_of_study": student_data.get("field_of_study", "Not specified"),
                 "exam_scores": student_data.get("exam_scores", []),
                 "additional_preferences": student_data.get("additional_preferences", {})
             }
             
-            # Pre-filter programs based on student's preferred location
+            # Pre-filter programs based on student's preferred locations
             filtered_programs = []
-            preferred_location = student_data.get("preferred_location", "").lower()
+            preferred_locations = student_data.get("preferred_location", [])
             
-            if preferred_location:
-                # Filter programs that match the student's preferred location
+            if preferred_locations and len(preferred_locations) > 0:
+                # Filter programs that match any of the student's preferred locations
                 for program in available_programs:
                     program_location = program.get("location", "").lower()
-                    if preferred_location in program_location or program_location in preferred_location:
-                        filtered_programs.append(program)
+                    for location in preferred_locations:
+                        location_lower = location.lower()
+                        if location_lower in program_location or program_location in location_lower:
+                            filtered_programs.append(program)
+                            break  # Once a match is found, no need to check other locations
                 
-                # If no programs match the location, use all programs
+                # If no programs match any location, use all programs
                 if not filtered_programs:
                     filtered_programs = available_programs
             else:
-                # If no preferred location is specified, use all programs
+                # If no preferred locations are specified, use all programs
                 filtered_programs = available_programs
             
             # Limit to a maximum of 50 programs to avoid token limits
@@ -296,22 +300,25 @@ class GroqService:
             # Get available programs for recommendations
             all_programs = await ProgramModel.get_all()
             
-            # Pre-filter programs based on student's preferred location
+            # Pre-filter programs based on student's preferred locations
             filtered_programs = []
-            preferred_location = student_data.get("preferred_location", "").lower()
+            preferred_locations = student_data.get("preferred_location", [])
             
-            if preferred_location:
-                # Filter programs that match the student's preferred location
+            if preferred_locations and len(preferred_locations) > 0:
+                # Filter programs that match any of the student's preferred locations
                 for program in all_programs:
                     program_location = program.get("location", "").lower()
-                    if preferred_location in program_location or program_location in preferred_location:
-                        filtered_programs.append(program)
+                    for location in preferred_locations:
+                        location_lower = location.lower()
+                        if location_lower in program_location or program_location in location_lower:
+                            filtered_programs.append(program)
+                            break  # Once a match is found, no need to check other locations
                 
-                # If no programs match the location, use all programs
+                # If no programs match any location, use all programs
                 if not filtered_programs:
                     filtered_programs = all_programs
             else:
-                # If no preferred location is specified, use all programs
+                # If no preferred locations are specified, use all programs
                 filtered_programs = all_programs
             
             # Limit to a maximum of 50 programs to avoid token limits
