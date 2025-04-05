@@ -192,3 +192,4 @@ logs/
 .cursor.project
 scripts/create_tables.sql
 scripts/insert_sample_data.py
+scripts/update_programs.py

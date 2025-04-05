@@ -280,111 +280,159 @@ class GroqService:
             }
     
     @staticmethod
-    async def chat_with_student(
-        student_data: Dict[str, Any],
-        message: str,
-        conversation_history: List[Dict[str, str]]
-    ) -> Dict[str, Any]:
+    async def chat_with_student(student_data: Dict[str, Any], message: str, conversation_history: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Chat with a student using Groq API and provide program recommendations.
-        
-        Args:
-            student_data (Dict[str, Any]): The student's profile data
-            message (str): The student's message
-            conversation_history (List[Dict[str, str]]): Previous conversation messages
-            
-        Returns:
-            Dict[str, Any]: The AI's response and any additional information
+        Chat with the student using Groq API.
+        Returns the AI's response and updates the conversation history.
         """
         try:
-            # Get available programs for recommendations
+            # Get all available programs from the database
             all_programs = await ProgramModel.get_all()
             
-            # Pre-filter programs based on student's preferred locations
-            filtered_programs = []
-            preferred_locations = student_data.get("preferred_location", [])
+            # Pre-filter programs based on student preferences
+            filtered_programs = all_programs
             
-            if preferred_locations and len(preferred_locations) > 0:
-                # Filter programs that match any of the student's preferred locations
-                for program in all_programs:
-                    program_location = program.get("location", "").lower()
-                    for location in preferred_locations:
-                        location_lower = location.lower()
-                        if location_lower in program_location or program_location in location_lower:
-                            filtered_programs.append(program)
-                            break  # Once a match is found, no need to check other locations
+            # 1. Filter by preferred location if available
+            if "preferred_location" in student_data and student_data["preferred_location"]:
+                preferred_locations = student_data["preferred_location"]
                 
-                # If no programs match any location, use all programs
+                # Handle different types of preferred_location data
+                if isinstance(preferred_locations, str):
+                    preferred_locations = [preferred_locations]
+                elif isinstance(preferred_locations, dict):
+                    # Handle case where preferred_location is a dictionary
+                    preferred_locations = [str(preferred_locations)]
+                elif isinstance(preferred_locations, list):
+                    # Ensure all items in the list are strings
+                    preferred_locations = [str(loc) for loc in preferred_locations]
+                else:
+                    # Handle any other type by converting to string
+                    preferred_locations = [str(preferred_locations)]
+                
+                # Convert to lowercase for case-insensitive matching
+                preferred_locations = [str(loc).lower() for loc in preferred_locations]
+                
+                # Filter programs by location
+                filtered_programs = [
+                    program for program in all_programs 
+                    if isinstance(program.get("location"), str) and 
+                    program.get("location", "").lower() in preferred_locations
+                ]
+                
+                # If no programs match the location preference, use all programs
                 if not filtered_programs:
                     filtered_programs = all_programs
-            else:
-                # If no preferred locations are specified, use all programs
-                filtered_programs = all_programs
             
-            # Limit to a maximum of 50 programs to avoid token limits
+            # 2. Filter by field of study if available
+            if "field_of_study" in student_data and student_data["field_of_study"]:
+                field_of_study = str(student_data["field_of_study"]).lower()
+                field_filtered_programs = [
+                    program for program in filtered_programs 
+                    if isinstance(program.get("program_title"), str) and 
+                    field_of_study in program.get("program_title", "").lower()
+                ]
+                
+                # If programs match the field of study, use those
+                if field_filtered_programs:
+                    filtered_programs = field_filtered_programs
+            
+            # 3. Filter by tuition fees if budget preference is available
+            if "additional_preferences" in student_data and student_data["additional_preferences"]:
+                additional_preferences = student_data["additional_preferences"]
+                if isinstance(additional_preferences, dict) and "budget_range" in additional_preferences:
+                    budget_range = additional_preferences["budget_range"]
+                    
+                    # Parse budget range (format: "min-max")
+                    try:
+                        if isinstance(budget_range, str):
+                            min_budget, max_budget = map(int, budget_range.split("-"))
+                            
+                            # Filter programs within budget range
+                            budget_filtered_programs = [
+                                program for program in filtered_programs 
+                                if isinstance(program.get("fees"), (int, float)) and 
+                                min_budget <= program.get("fees") <= max_budget
+                            ]
+                            
+                            # If programs match the budget, use those
+                            if budget_filtered_programs:
+                                filtered_programs = budget_filtered_programs
+                    except (ValueError, AttributeError):
+                        # If budget parsing fails, continue with current filtered programs
+                        pass
+            
+            # Limit the number of programs to avoid token limits
             if len(filtered_programs) > 50:
                 filtered_programs = filtered_programs[:50]
             
-            # Construct the system prompt with student context and filtered programs
-            system_prompt = f"""
-            You are an AI counselor helping students choose the right educational program.
+            # Format student data for the prompt
+            student_info = {
+                "academic_background": str(student_data.get("academic_background", "Not specified")),
+                "preferred_location": str(student_data.get("preferred_location", "Not specified")),
+                "field_of_study": str(student_data.get("field_of_study", "Not specified")),
+                "exam_scores": student_data.get("exam_scores", []),
+                "additional_preferences": student_data.get("additional_preferences", {})
+            }
             
-            Student Profile:
-            - Academic Background: {json.dumps(student_data.get('academic_background', {}))}
-            - Preferred Location: {student_data.get('preferred_location', 'Not specified')}
-            - Field of Interest: {student_data.get('field_of_study', 'Not specified')}
-            - Exam Scores: {json.dumps(student_data.get('exam_scores', {}))}
-            - Additional Preferences: {json.dumps(student_data.get('additional_preferences', {}))}
-            
-            Available Programs (filtered by location preference):
-            {json.dumps(filtered_programs, indent=2)}
-            
-            Your role is to:
-            1. Keep responses concise and focused on the student's specific query
-            2. Provide personalized program recommendations based on the student's profile
-            3. Match programs to the student's eligibility criteria and preferences
-            4. Answer questions about educational pathways clearly and directly
-            
-            When recommending programs:
-            - Start with a brief overview of 1-2 most relevant programs
-            - DO NOT provide all details at once (fees, curriculum, etc.)
-            - Instead, ask if the student would like more specific information
-            - Use a conversational, interactive approach with follow-up questions
-            
-            Communication style:
-            - Be concise and direct - avoid lengthy explanations
-            - Focus on answering the specific question asked
-            - Use bullet points for multiple recommendations
-            - End responses with a question to encourage further interaction
-            - If recommending programs, ask if the student wants more details about specific aspects
-            
-            Example response format:
-            "Based on your profile, I recommend [Program Name] at [Institution]. This program [brief 1-2 sentence description].
-            
-            Would you like to know more about the program fees, curriculum, or application process?"
-            
-            Remember: Your goal is to help students find the right educational path through an interactive conversation, not by dumping all information at once.
-            """
-            
-            # Prepare the conversation history for the API
-            messages = [
-                {"role": "system", "content": system_prompt}
-            ]
-            
-            # Add conversation history (limit to last 10 messages to stay within context window)
-            for msg in conversation_history[-10:]:
-                messages.append({
-                    "role": msg["role"],
-                    "content": msg["content"]
+            # Format programs data for the prompt
+            programs_data = []
+            for program in filtered_programs:
+                programs_data.append({
+                    "title": program.get("program_title", "Unknown Program"),
+                    "institution": program.get("institution", "Unknown Institution"),
+                    "location": program.get("location", "Unknown Location"),
+                    "duration": program.get("duration", "Unknown Duration"),
+                    "fees": program.get("fees", "Unknown Fees"),
+                    "overview": program.get("program_overview", "No overview available"),
+                    "delivery_mode": program.get("mode_of_delivery", "Unknown Delivery Mode")
                 })
-                
-            # Add the current message
-            messages.append({
-                "role": "user",
-                "content": message
-            })
             
-            # Make the API request to Groq
+            # Create a JSON prompt for the Groq API
+            prompt = {
+                "role": "system",
+                "content": f"""You are an AI educational counselor helping students find the right educational programs.
+                
+                Student Profile:
+                - Academic Background: {student_info['academic_background']}
+                - Preferred Location: {student_info['preferred_location']}
+                - Field of Study: {student_info['field_of_study']}
+                - Additional Preferences: {student_info['additional_preferences']}
+                
+                Available Programs (filtered based on student preferences):
+                {json.dumps(programs_data, indent=2)}
+                
+                Guidelines:
+                1. Behave like a human counselor - be friendly, empathetic, and conversational.
+                2. Only provide program recommendations when the student explicitly asks for them.
+                3. For general questions or greetings, respond naturally without forcing recommendations.
+                4. Keep your responses concise and focused on the student's specific questions.
+                5. When recommendations are requested, only recommend programs from the available programs list that match the student's profile.
+                6. If the student asks about programs not in the list, explain that you can only recommend from available options.
+                7. Prioritize programs that align with the student's academic background, location preferences, and field of study.
+                8. Ask follow-up questions to better understand the student's needs if necessary.
+                9. If no programs match the student's criteria, suggest broadening their search criteria.
+                10. IMPORTANT: If the student asks questions unrelated to educational programs or academic counseling (such as personal advice, non-educational topics, or general knowledge questions), politely redirect them back to educational counseling. For example: "I'm here to help you with educational programs and academic guidance. Let's focus on finding the right educational path for you. What are your academic interests?"
+                11. CRITICAL: If the student's profile (especially location preferences) doesn't match any universities in the database, inform them clearly and suggest they edit their profile to include more countries or locations. For example: "I couldn't find any programs matching your current location preferences. You might want to edit your profile to include more countries or regions to increase your chances of finding suitable programs. Would you like me to help you with that?"
+                
+                Previous conversation:
+                {json.dumps(conversation_history, indent=2)}
+                
+                Student's message: {message}
+                
+                Provide a helpful, human-like response that addresses the student's question. Only include program recommendations if the student specifically asks for them."""
+            }
+            
+            # Prepare the request payload
+            payload = {
+                "model": "llama3-8b-8192",
+                "messages": [prompt],
+                "max_tokens": 1024,
+                "temperature": 0.7,
+                "top_p": 1,
+                "stream": False
+            }
+            
+            # Make the API call
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     f"{GroqService.GROQ_API_URL}/chat/completions",
@@ -392,32 +440,24 @@ class GroqService:
                         "Authorization": f"Bearer {GroqService.GROQ_API_KEY}",
                         "Content-Type": "application/json"
                     },
-                    json={
-                        "model": "llama3-8b-8192",
-                        "messages": messages,
-                        "temperature": 0.7,
-                        "max_tokens": 1024,
-                        "top_p": 1,
-                        "stream": False
-                    }
+                    json=payload
                 )
                 
-                if response.status_code != 200:
+                # Check if the request was successful
+                if response.status_code == 200:
+                    response_data = response.json()
                     return {
-                        "error": f"API error: {response.status_code}",
-                        "message": "I'm sorry, I'm having trouble processing your request right now."
+                        "success": True,
+                        "response": response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response generated")
                     }
-                    
-                result = response.json()
-                ai_response = result["choices"][0]["message"]["content"]
-                
-                return {
-                    "response": ai_response,
-                    "success": True
-                }
+                else:
+                    return {
+                        "success": False,
+                        "error": f"API request failed with status code {response.status_code}: {response.text}"
+                    }
                 
         except Exception as e:
             return {
-                "error": str(e),
-                "message": "I'm sorry, I'm having trouble processing your request right now."
+                "success": False,
+                "error": f"Error in chat with student: {str(e)}"
             }
