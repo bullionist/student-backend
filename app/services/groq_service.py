@@ -1,7 +1,6 @@
 import httpx
 from app.config import settings
 from typing import Dict, Any, Optional, List
-from loguru import logger
 import json
 from app.models.program import ProgramModel
 
@@ -80,7 +79,6 @@ class GroqService:
                 )
                 
                 if response.status_code != 200:
-                    logger.error(f"Groq API error: {response.status_code} - {response.text}")
                     return {
                         "error": f"API error: {response.status_code}",
                         "raw_input": input_text
@@ -103,8 +101,7 @@ class GroqService:
                         extracted_data = json.loads(content)
                         
                     return extracted_data
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse JSON from Groq response: {str(e)}")
+                except json.JSONDecodeError:
                     return {
                         "error": "Failed to parse structured data",
                         "raw_input": input_text,
@@ -112,7 +109,6 @@ class GroqService:
                     }
                 
         except Exception as e:
-            logger.error(f"Error extracting student details: {str(e)}")
             return {
                 "error": str(e),
                 "raw_input": input_text
@@ -145,9 +141,31 @@ class GroqService:
                 "additional_preferences": student_data.get("additional_preferences", {})
             }
             
+            # Pre-filter programs based on student's preferred location
+            filtered_programs = []
+            preferred_location = student_data.get("preferred_location", "").lower()
+            
+            if preferred_location:
+                # Filter programs that match the student's preferred location
+                for program in available_programs:
+                    program_location = program.get("location", "").lower()
+                    if preferred_location in program_location or program_location in preferred_location:
+                        filtered_programs.append(program)
+                
+                # If no programs match the location, use all programs
+                if not filtered_programs:
+                    filtered_programs = available_programs
+            else:
+                # If no preferred location is specified, use all programs
+                filtered_programs = available_programs
+            
+            # Limit to a maximum of 50 programs to avoid token limits
+            if len(filtered_programs) > 50:
+                filtered_programs = filtered_programs[:50]
+            
             # Format programs data for the prompt
             programs_info = []
-            for program in available_programs:
+            for program in filtered_programs:
                 programs_info.append({
                     "id": program.get("id", ""),
                     "program_title": program.get("program_title", ""),
@@ -170,7 +188,7 @@ class GroqService:
             Student Profile:
             {json.dumps(student_info, indent=2)}
             
-            Available Programs:
+            Available Programs (filtered by location preference):
             {json.dumps(programs_info, indent=2)}
             
             Generate recommendations in the following JSON format:
@@ -220,7 +238,6 @@ class GroqService:
                 )
                 
                 if response.status_code != 200:
-                    logger.error(f"Groq API error: {response.status_code} - {response.text}")
                     return {
                         "error": f"API error: {response.status_code}",
                         "message": "Failed to generate recommendations"
@@ -246,15 +263,13 @@ class GroqService:
                     recommendations["raw_response"] = content
                     
                     return recommendations
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse JSON from Groq response: {str(e)}")
+                except json.JSONDecodeError:
                     return {
                         "error": "Failed to parse recommendations",
                         "raw_output": content
                     }
                 
         except Exception as e:
-            logger.error(f"Error generating course recommendations: {str(e)}")
             return {
                 "error": str(e),
                 "message": "Failed to generate recommendations"
@@ -279,9 +294,31 @@ class GroqService:
         """
         try:
             # Get available programs for recommendations
-            available_programs = await ProgramModel.get_all()
+            all_programs = await ProgramModel.get_all()
             
-            # Construct the system prompt with student context and available programs
+            # Pre-filter programs based on student's preferred location
+            filtered_programs = []
+            preferred_location = student_data.get("preferred_location", "").lower()
+            
+            if preferred_location:
+                # Filter programs that match the student's preferred location
+                for program in all_programs:
+                    program_location = program.get("location", "").lower()
+                    if preferred_location in program_location or program_location in preferred_location:
+                        filtered_programs.append(program)
+                
+                # If no programs match the location, use all programs
+                if not filtered_programs:
+                    filtered_programs = all_programs
+            else:
+                # If no preferred location is specified, use all programs
+                filtered_programs = all_programs
+            
+            # Limit to a maximum of 50 programs to avoid token limits
+            if len(filtered_programs) > 50:
+                filtered_programs = filtered_programs[:50]
+            
+            # Construct the system prompt with student context and filtered programs
             system_prompt = f"""
             You are an AI counselor helping students choose the right educational program.
             
@@ -292,8 +329,8 @@ class GroqService:
             - Exam Scores: {json.dumps(student_data.get('exam_scores', {}))}
             - Additional Preferences: {json.dumps(student_data.get('additional_preferences', {}))}
             
-            Available Programs:
-            {json.dumps(available_programs, indent=2)}
+            Available Programs (filtered by location preference):
+            {json.dumps(filtered_programs, indent=2)}
             
             Your role is to:
             1. Keep responses concise and focused on the student's specific query
@@ -302,20 +339,24 @@ class GroqService:
             4. Answer questions about educational pathways clearly and directly
             
             When recommending programs:
-            - Prioritize programs that match the student's academic background
-            - Consider location preferences as a key factor
-            - Match field of study interests with program offerings
-            - Take into account budget constraints if mentioned
-            - Consider program duration and mode of delivery preferences
+            - Start with a brief overview of 1-2 most relevant programs
+            - DO NOT provide all details at once (fees, curriculum, etc.)
+            - Instead, ask if the student would like more specific information
+            - Use a conversational, interactive approach with follow-up questions
             
             Communication style:
             - Be concise and direct - avoid lengthy explanations
             - Focus on answering the specific question asked
             - Use bullet points for multiple recommendations
-            - Highlight key eligibility criteria and application deadlines
-            - If the student asks about programs, always reference specific programs from the available options
+            - End responses with a question to encourage further interaction
+            - If recommending programs, ask if the student wants more details about specific aspects
             
-            Remember: Your goal is to help students find the right educational path efficiently and effectively.
+            Example response format:
+            "Based on your profile, I recommend [Program Name] at [Institution]. This program [brief 1-2 sentence description].
+            
+            Would you like to know more about the program fees, curriculum, or application process?"
+            
+            Remember: Your goal is to help students find the right educational path through an interactive conversation, not by dumping all information at once.
             """
             
             # Prepare the conversation history for the API
@@ -355,7 +396,6 @@ class GroqService:
                 )
                 
                 if response.status_code != 200:
-                    logger.error(f"Groq API error: {response.status_code} - {response.text}")
                     return {
                         "error": f"API error: {response.status_code}",
                         "message": "I'm sorry, I'm having trouble processing your request right now."
@@ -370,7 +410,6 @@ class GroqService:
                 }
                 
         except Exception as e:
-            logger.error(f"Error in chat with student: {str(e)}")
             return {
                 "error": str(e),
                 "message": "I'm sorry, I'm having trouble processing your request right now."

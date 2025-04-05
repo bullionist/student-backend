@@ -83,9 +83,3 @@ class ChatResponse(BaseModel):
     success: bool
     response: str
     error: Optional[str] = None
-
-class RecommendationResponse(BaseModel):
-    """Model for course recommendations response."""
-    success: bool
-    recommendations: Dict[str, Any]
-    error: Optional[str] = None
