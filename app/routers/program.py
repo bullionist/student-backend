@@ -1,10 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, status
 from app.schemas.program import ProgramCreate, ProgramResponse, ProgramUpdate
 from app.models.program import ProgramModel
 from typing import List
 from loguru import logger
-import supabase
-from app.utils.auth import get_current_admin_user
 
 router = APIRouter(
     prefix="/api/programs",
@@ -12,12 +10,8 @@ router = APIRouter(
 )
 
 @router.post("", response_model=ProgramResponse, status_code=status.HTTP_201_CREATED)
-async def create_program(program: ProgramCreate, _: dict = Depends(get_current_admin_user)):
-    """
-    Create a new program.
-    
-    Requires admin authentication.
-    """
+async def create_program(program: ProgramCreate):
+    """Create a new program."""
     try:
         result = await ProgramModel.create(program)
         return result
@@ -29,15 +23,11 @@ async def create_program(program: ProgramCreate, _: dict = Depends(get_current_a
         )
 
 @router.get("", response_model=List[ProgramResponse])
-async def get_all_programs(_: dict = Depends(get_current_admin_user)):
-    """
-    Get all programs.
-    
-    Requires admin authentication.
-    """
+async def get_all_programs():
+    """Get all programs."""
     try:
-        result = await ProgramModel.get_all()
-        return result
+        programs = await ProgramModel.get_all()
+        return programs
     except Exception as e:
         logger.error(f"Error getting all programs: {str(e)}")
         raise HTTPException(
@@ -46,20 +36,16 @@ async def get_all_programs(_: dict = Depends(get_current_admin_user)):
         )
 
 @router.get("/{program_id}", response_model=ProgramResponse)
-async def get_program(program_id: str, _: dict = Depends(get_current_admin_user)):
-    """
-    Get a specific program by ID.
-    
-    Requires admin authentication.
-    """
+async def get_program(program_id: str):
+    """Get a specific program by ID."""
     try:
-        result = await ProgramModel.get_by_id(program_id)
-        if not result:
+        program = await ProgramModel.get_by_id(program_id)
+        if not program:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Program with ID {program_id} not found"
             )
-        return result
+        return program
     except HTTPException:
         raise
     except Exception as e:
@@ -70,12 +56,8 @@ async def get_program(program_id: str, _: dict = Depends(get_current_admin_user)
         )
 
 @router.put("/{program_id}", response_model=ProgramResponse)
-async def update_program(program_id: str, program_update: ProgramUpdate, _: dict = Depends(get_current_admin_user)):
-    """
-    Update a program.
-    
-    Requires admin authentication.
-    """
+async def update_program(program_id: str, program_update: ProgramUpdate):
+    """Update a program's information."""
     try:
         # Check if program exists
         existing_program = await ProgramModel.get_by_id(program_id)
@@ -97,12 +79,8 @@ async def update_program(program_id: str, program_update: ProgramUpdate, _: dict
         )
 
 @router.delete("/{program_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_program(program_id: str, _: dict = Depends(get_current_admin_user)):
-    """
-    Delete a program.
-    
-    Requires admin authentication.
-    """
+async def delete_program(program_id: str):
+    """Delete a program."""
     try:
         # Check if program exists
         existing_program = await ProgramModel.get_by_id(program_id)

@@ -1,8 +1,8 @@
 from app.database.supabase import supabase_client
-from app.schemas.student import StudentCreate, StudentUpdate, ConversationMessage, ConversationHistory
+from app.schemas.student import StudentCreate, StudentUpdate
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-import json
+from loguru import logger
 
 class StudentModel:
     """Model for student data operations"""
@@ -11,45 +11,10 @@ class StudentModel:
     
     @staticmethod
     async def create(student: StudentCreate) -> Dict[str, Any]:
-        """Create a new student session"""
+        """Create a new student"""
         try:
             # Convert the student model to dict
             student_data = student.dict()
-            
-            # Initialize conversation history if not present
-            if "conversation_history" not in student_data or student_data["conversation_history"] is None:
-                student_data["conversation_history"] = {
-                    "messages": [],
-                    "last_updated": datetime.utcnow().isoformat()
-                }
-            else:
-                # Convert last_updated to ISO string if it's a datetime object
-                if isinstance(student_data["conversation_history"].get("last_updated"), datetime):
-                    student_data["conversation_history"]["last_updated"] = student_data["conversation_history"]["last_updated"].isoformat()
-            
-            # Ensure preferred_location is a list
-            if "preferred_location" in student_data:
-                if isinstance(student_data["preferred_location"], str):
-                    student_data["preferred_location"] = [student_data["preferred_location"]]
-                elif student_data["preferred_location"] is None:
-                    student_data["preferred_location"] = []
-            
-            # Convert datetime objects to ISO format strings
-            if "exam_scores" in student_data:
-                for exam in student_data["exam_scores"]:
-                    if "date_taken" in exam and exam["date_taken"]:
-                        exam["date_taken"] = exam["date_taken"].isoformat()
-                    # Ensure validity_period is an integer if present
-                    if "validity_period" in exam and exam["validity_period"] is not None:
-                        try:
-                            exam["validity_period"] = int(exam["validity_period"])
-                        except (ValueError, TypeError):
-                            exam["validity_period"] = None
-            
-            if "additional_preferences" in student_data:
-                prefs = student_data["additional_preferences"]
-                if "start_date_preference" in prefs and prefs["start_date_preference"]:
-                    prefs["start_date_preference"] = prefs["start_date_preference"].isoformat()
             
             # Insert into database
             try:
@@ -73,11 +38,64 @@ class StudentModel:
     async def get_by_id(student_id: str) -> Optional[Dict[str, Any]]:
         """Get a student by ID"""
         try:
+            logger.info(f"Attempting to fetch student with ID: {student_id}")
+            logger.info(f"Using table name: {StudentModel.TABLE_NAME}")
+            
+            # First, let's try to get all students to verify table access
+            all_students = await StudentModel.get_all()
+            logger.info(f"Total students in table: {len(all_students)}")
+            
+            # Now try to get the specific student
             response = supabase_client.table(StudentModel.TABLE_NAME).select("*").eq("id", student_id).execute()
+            
+            logger.info(f"Supabase response data: {response.data}")
+            
             if response.data and len(response.data) > 0:
+                logger.info(f"Student found: {response.data[0]}")
                 return response.data[0]
+            
+            # If no data found, let's try a case-insensitive search
+            logger.info("No exact match found, trying case-insensitive search...")
+            all_matching_ids = [s for s in all_students if str(s.get('id', '')).lower() == student_id.lower()]
+            if all_matching_ids:
+                logger.info(f"Found student with case-insensitive match: {all_matching_ids[0]}")
+                return all_matching_ids[0]
+            
+            logger.warning(f"No student found with ID: {student_id}")
             return None
         except Exception as e:
+            logger.error(f"Error fetching student by ID: {str(e)}")
+            logger.error(f"Error type: {type(e)}")
+            logger.error(f"Error details: {str(e)}")
+            raise
+
+    @staticmethod
+    async def get_all() -> List[Dict[str, Any]]:
+        """Get all students"""
+        try:
+            logger.info("Attempting to fetch all students")
+            
+            # First verify if the table exists
+            try:
+                # Try to get table info
+                response = supabase_client.table(StudentModel.TABLE_NAME).select("id").limit(1).execute()
+                logger.info("Table exists and is accessible")
+            except Exception as table_error:
+                logger.error(f"Error accessing table: {str(table_error)}")
+                raise Exception(f"Could not access table '{StudentModel.TABLE_NAME}'. Please verify table name and permissions.")
+            
+            # Now get all students
+            response = supabase_client.table(StudentModel.TABLE_NAME).select("*").execute()
+            logger.info(f"Found {len(response.data) if response.data else 0} students")
+            
+            if not response.data:
+                logger.warning("No students found in the table")
+            
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Error fetching all students: {str(e)}")
+            logger.error(f"Error type: {type(e)}")
+            logger.error(f"Error details: {str(e)}")
             raise
     
     @staticmethod
@@ -87,81 +105,11 @@ class StudentModel:
             # Only include non-None fields in the update
             update_data = {k: v for k, v in student_update.dict().items() if v is not None}
             
-            # Ensure preferred_location is a list
-            if "preferred_location" in update_data:
-                if isinstance(update_data["preferred_location"], str):
-                    update_data["preferred_location"] = [update_data["preferred_location"]]
-                elif update_data["preferred_location"] is None:
-                    update_data["preferred_location"] = []
-            
-            # Convert datetime objects to ISO format strings
-            if "exam_scores" in update_data:
-                for exam in update_data["exam_scores"]:
-                    if "date_taken" in exam and exam["date_taken"]:
-                        exam["date_taken"] = exam["date_taken"].isoformat()
-                    # Ensure validity_period is an integer if present
-                    if "validity_period" in exam and exam["validity_period"] is not None:
-                        try:
-                            exam["validity_period"] = int(exam["validity_period"])
-                        except (ValueError, TypeError):
-                            exam["validity_period"] = None
-            
-            if "additional_preferences" in update_data:
-                prefs = update_data["additional_preferences"]
-                if "start_date_preference" in prefs and prefs["start_date_preference"]:
-                    prefs["start_date_preference"] = prefs["start_date_preference"].isoformat()
-            
             if not update_data:
                 # Nothing to update
                 return await StudentModel.get_by_id(student_id)
                 
             response = supabase_client.table(StudentModel.TABLE_NAME).update(update_data).eq("id", student_id).execute()
-            if response.data and len(response.data) > 0:
-                return response.data[0]
-            return None
-        except Exception as e:
-            raise
-    
-    @staticmethod
-    async def add_conversation_message(student_id: str, role: str, content: str) -> Optional[Dict[str, Any]]:
-        """Add a message to the conversation history"""
-        try:
-            # First get the current student data
-            student_data = await StudentModel.get_by_id(student_id)
-            if not student_data:
-                return None
-                
-            # Create new message with ISO format timestamp
-            new_message = {
-                "role": role,
-                "content": content,
-                "timestamp": datetime.now().isoformat()
-            }
-            
-            # Get current conversation history or create a new one
-            conversation_history = student_data.get("conversation_history", {})
-            if not isinstance(conversation_history, dict):
-                conversation_history = {"messages": []}
-            
-            # Ensure messages list exists
-            if "messages" not in conversation_history:
-                conversation_history["messages"] = []
-            
-            # Add the new message
-            conversation_history["messages"].append(new_message)
-            
-            # Maintain only the last 10 messages
-            if len(conversation_history["messages"]) > 10:
-                conversation_history["messages"] = conversation_history["messages"][-10:]
-            
-            # Update last_updated timestamp
-            conversation_history["last_updated"] = datetime.now().isoformat()
-            
-            # Update the student record
-            response = supabase_client.table(StudentModel.TABLE_NAME).update(
-                {"conversation_history": conversation_history}
-            ).eq("id", student_id).execute()
-            
             if response.data and len(response.data) > 0:
                 return response.data[0]
             return None

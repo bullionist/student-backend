@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str
     GROQ_API_URL: str = "https://api.groq.com/openai/v1"
     
+    # OpenAI API configuration
+    OPENAI_API_KEY: str
+    OPENAI_API_URL: str = "https://api.openai.com/v1"
+    
     # Application settings
     APP_ENV: str = "development"
     DEBUG: bool = True
